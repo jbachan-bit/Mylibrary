@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>📚 My Book Library</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body { margin: 0; background: #1c1917; }
+    .line-clamp-2 {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const Search = ({ size = 20, className = '' }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+    );
+    const X = ({ size = 20, className = '' }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        <path d="M18 6 6 18M6 6l12 12"/>
+      </svg>
+    );
+    const HomeIcon = ({ size = 22 }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+    );
+    const BookIcon = ({ size = 22 }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+      </svg>
+    );
+    const StarIcon = ({ size = 22 }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+      </svg>
+    );
+    const BookmarkIcon = ({ size = 22 }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+      </svg>
+    );
+
+    const FEATURED_BOOKS = [
+      { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', cover: 'https://covers.openlibrary.org/b/id/7896803-M.jpg' },
+      { title: 'To Kill a Mockingbird', author: 'Harper Lee', cover: 'https://covers.openlibrary.org/b/id/8236375-M.jpg' },
+      { title: '1984', author: 'George Orwell', cover: 'https://covers.openlibrary.org/b/id/7878060-M.jpg' },
+      { title: 'The Hobbit', author: 'J.R.R. Tolkien', cover: 'https://covers.openlibrary.org/b/id/8235403-M.jpg' },
+      { title: 'Dune', author: 'Frank Herbert', cover: 'https://covers.openlibrary.org/b/id/7938847-M.jpg' },
+      { title: 'Project Hail Mary', author: 'Andy Weir', cover: 'https://covers.openlibrary.org/b/id/10552632-M.jpg' },
+    ];
+
+    const PRESET_GENRES = ['Fantasy', 'Science Fiction', 'Mystery', 'Romance', 'Thriller', 'Historical Fiction', 'Horror', 'Biography', 'Self-Help', 'Adventure'];
+
+    function BookLibrary() {
+      const [books, setBooks] = useState([]);
+      const [currentSection, setCurrentSection] = useState('dashboard');
+      const [searchQuery, setSearchQuery] = useState('');
+      const [searchResults, setSearchResults] = useState([]);
+      const [searching, setSearching] = useState(false);
+      const [selectedGenre, setSelectedGenre] = useState(null);
+      const [recommendations, setRecommendations] = useState([]);
+      const [loadingRecs, setLoadingRecs] = useState(false);
+      const [trending, setTrending] = useState([]);
+      const [loadingTrending, setLoadingTrending] = useState(false);
+      const [showModal, setShowModal] = useState(false);
+      const [currentBookData, setCurrentBookData] = useState(null);
+      const [formData, setFormData] = useState({
+        title: '',
+        author: '',
+        genre: '',
+        status: 'wantlist',
+        notes: '',
+      });
+
+      useEffect(() => {
+        const stored = localStorage.getItem('books');
+        if (stored) setBooks(JSON.parse(stored));
+      }, []);
+
+      useEffect(() => {
+        localStorage.setItem('books', JSON.stringify(books));
+      }, [books]);
+
+      useEffect(() => {
+        if (!searchQuery.trim()) { setSearchResults([]); return; }
+        const timer = setTimeout(async () => {
+          setSearching(true);
+          try {
+            const res = await fetch(
+              `https://openlibrary.org/search.json?q=${encodeURIComponent(searchQuery)}&limit=20&fields=title,author_name,cover_i,subject,ratings_average`
+            );
+            const data = await res.json();
+            const results = (data.docs || []).map(doc => ({
+              title: doc.title,
+              author: doc.author_name?.[0] || 'Unknown author',
+              cover: doc.cover_i
+                ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
+                : null,
+              genre: doc.subject?.[0] || '',
+              rating: doc.ratings_average ? Math.round(doc.ratings_average * 10) / 10 : 0,
+            }));
+            setSearchResults(results);
+          } catch {
+            setSearchResults([]);
+          } finally {
+            setSearching(false);
+          }
+        }, 400);
+        return () => clearTimeout(timer);
+      }, [searchQuery]);
+
+      const handleSearch = (query) => {
+        setSearchQuery(query);
+        if (!query.trim()) setSearchResults([]);
+      };
+
+      useEffect(() => {
+        if (!selectedGenre) return;
+        setLoadingRecs(true);
+        setLoadingTrending(true);
+        setRecommendations([]);
+        setTrending([]);
+        const savedTitles = new Set(books.map(b => b.title.toLowerCase()));
+
+        const isEnglish = str => !Array.from(str).some(c => c.charCodeAt(0) >= 0x2E80);
+
+        const toBook = (doc, fallbackGenre) => ({
+          title: doc.title,
+          author: doc.author_name?.[0] || 'Unknown author',
+          cover: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : null,
+          coverUrl: doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : null,
+          genre: doc.subject?.[0] || fallbackGenre,
+          rating: doc.ratings_average ? Math.round(doc.ratings_average * 10) / 10 : 0,
+        });
+
+        const base = `https://openlibrary.org/search.json?subject=${encodeURIComponent(selectedGenre)}&limit=40&language=eng&fields=title,author_name,cover_i,subject,ratings_average`;
+
+        fetch(`${base}&sort=rating+desc`)
+          .then(r => r.json())
+          .then(data => {
+            const results = (data.docs || [])
+              .map(d => toBook(d, selectedGenre))
+              .filter(b => !savedTitles.has(b.title.toLowerCase()) && isEnglish(b.title));
+            setRecommendations(results.slice(0, 18));
+          })
+          .catch(() => setRecommendations([]))
+          .finally(() => setLoadingRecs(false));
+
+        fetch(`${base}&sort=new`)
+          .then(r => r.json())
+          .then(data => {
+            const results = (data.docs || [])
+              .map(d => toBook(d, selectedGenre))
+              .filter(b => !savedTitles.has(b.title.toLowerCase()) && isEnglish(b.title));
+            setTrending(results.slice(0, 18));
+          })
+          .catch(() => setTrending([]))
+          .finally(() => setLoadingTrending(false));
+      }, [selectedGenre]);
+
+      const readGenres = [...new Set(
+        books.filter(b => b.status === 'read' && b.genre).map(b => b.genre)
+      )];
+      const genreOptions = [...new Set([...readGenres, ...PRESET_GENRES])];
+
+      const selectBook = (book) => {
+        setCurrentBookData(book);
+        setFormData({
+          title: book.title,
+          author: book.author || '',
+          genre: book.genre || '',
+          status: 'wantlist',
+          notes: '',
+        });
+        setShowModal(true);
+        setSearchResults([]);
+        setSearchQuery('');
+      };
+
+      const saveBook = () => {
+        const newBook = {
+          ...formData,
+          rating: currentBookData?.rating || 0,
+          coverUrl: currentBookData?.cover,
+          id: Date.now(),
+        };
+        setBooks(prev => [...prev, newBook]);
+        setShowModal(false);
+        setFormData({ title: '', author: '', genre: '', status: 'wantlist', notes: '' });
+        setCurrentBookData(null);
+      };
+
+      const deleteBook = (id) => {
+        setBooks(books.filter(b => b.id !== id));
+      };
+
+      const filterBooks = (status) => {
+        if (status === 'all') return books;
+        return books.filter(b => b.status === status);
+      };
+
+      const stats = [
+        { label: 'Total books', value: books.length },
+        { label: 'Read', value: books.filter(b => b.status === 'read').length },
+        { label: 'Reading', value: books.filter(b => b.status === 'unread').length },
+        { label: 'Want to read', value: books.filter(b => b.status === 'wantlist').length },
+      ];
+
+      const BookCard = ({ book, onDelete }) => (
+        <div className="group cursor-pointer">
+          <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-900 to-amber-800 aspect-[3/4] mb-3 border border-amber-700 shadow-lg hover:shadow-xl transition-shadow">
+            {book.coverUrl ? (
+              <img
+                src={book.coverUrl}
+                alt={book.title}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'flex';
+                }}
+              />
+            ) : null}
+            <div
+              className="absolute inset-0 items-center justify-center text-amber-200 text-4xl"
+              style={{ display: book.coverUrl ? 'none' : 'flex' }}
+            >
+              📖
+            </div>
+            {onDelete && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(book.id); }}
+                className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          <h3 className="text-sm font-semibold text-amber-50 line-clamp-2">{book.title}</h3>
+          <p className="text-xs text-amber-200">{book.author}</p>
+          {book.rating > 0 && (
+            <div className="mt-1 text-xs text-yellow-400 font-medium">
+              ★ {Number(book.rating).toFixed(1)} <span className="text-stone-500">/ 5</span>
+            </div>
+          )}
+        </div>
+      );
+
+      const navItems = [
+        { id: 'dashboard', label: 'Dashboard' },
+        { id: 'all', label: 'All books' },
+        { id: 'read', label: 'Read' },
+        { id: 'unread', label: 'Unread' },
+        { id: 'wantlist', label: 'Wantlist' },
+        { id: 'recommended', label: 'Recommended' },
+      ];
+
+      const sectionTitle = {
+        all: 'All books',
+        read: "Books I've read",
+        unread: "Books I'm reading",
+        wantlist: 'Want to read',
+      };
+
+      const bottomNav = [
+        { id: 'dashboard', label: 'Home',   Icon: HomeIcon },
+        { id: 'all',       label: 'Library', Icon: BookIcon },
+        { id: 'wantlist',  label: 'Wantlist', Icon: BookmarkIcon },
+        { id: 'recommended', label: 'For You', Icon: StarIcon },
+        { id: 'discover',  label: 'Search',  Icon: Search },
+      ];
+
+      return (
+        <div className="flex h-screen bg-stone-900 text-amber-50">
+          {/* Sidebar — desktop only */}
+          <div className="hidden md:flex w-56 bg-stone-800 border-r border-stone-700 p-6 flex-col gap-8 overflow-y-auto sticky top-0 h-screen">
+            <h1 className="text-2xl font-bold text-amber-300">📚 Library</h1>
+
+            <nav className="flex flex-col gap-3">
+              <h3 className="text-xs uppercase text-stone-400 font-semibold tracking-wider mb-2">My Library</h3>
+              {navItems.map(({ id, label }) => (
+                <button
+                  key={id}
+                  onClick={() => setCurrentSection(id)}
+                  className={`px-4 py-2 rounded-lg text-left text-sm transition-colors ${
+                    currentSection === id
+                      ? 'bg-amber-900 text-amber-50 font-medium'
+                      : 'text-stone-400 hover:bg-stone-700 hover:text-amber-100'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+
+            <nav className="flex flex-col gap-3">
+              <h3 className="text-xs uppercase text-stone-400 font-semibold tracking-wider mb-2">Discover</h3>
+              <button
+                onClick={() => setCurrentSection('discover')}
+                className={`px-4 py-2 rounded-lg text-left text-sm transition-colors ${
+                  currentSection === 'discover'
+                    ? 'bg-amber-900 text-amber-50 font-medium'
+                    : 'text-stone-400 hover:bg-stone-700 hover:text-amber-100'
+                }`}
+              >
+                Search books
+              </button>
+            </nav>
+
+            <button
+              onClick={() => setCurrentSection('discover')}
+              className="mt-auto w-full py-3 bg-amber-700 hover:bg-amber-600 rounded-lg font-medium text-amber-50 transition-colors"
+            >
+              + Search &amp; Add
+            </button>
+          </div>
+
+          {/* Main Content */}
+          <div className="flex-1 overflow-auto">
+            <div className="p-4 md:p-8 pb-24 md:pb-8">
+
+              {/* Dashboard */}
+              {currentSection === 'dashboard' && (
+                <div className="space-y-8">
+                  <div>
+                    <h1 className="text-2xl md:text-4xl font-bold text-amber-50 mb-2">Welcome back</h1>
+                    <p className="text-stone-400">Continue your reading journey</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                    {stats.map((stat, i) => (
+                      <div key={i} className="bg-stone-800 border border-stone-700 rounded-xl p-6 text-center">
+                        <div className="text-3xl font-bold text-amber-300">{stat.value}</div>
+                        <div className="text-xs uppercase text-stone-400 mt-2">{stat.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div>
+                    <h2 className="text-xl md:text-2xl font-bold text-amber-300 mb-4">Popular books to explore</h2>
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-4">
+                      {FEATURED_BOOKS.map((book, i) => (
+                        <div key={i} onClick={() => selectBook(book)}>
+                          <BookCard book={{ ...book, coverUrl: book.cover }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {books.length > 0 && (
+                    <div>
+                      <h2 className="text-xl md:text-2xl font-bold text-amber-300 mb-4">Recently added</h2>
+                      <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-4">
+                        {books.slice(-6).reverse().map((book) => (
+                          <BookCard key={book.id} book={book} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Book list sections */}
+              {['all', 'read', 'unread', 'wantlist'].includes(currentSection) && (
+                <div>
+                  <h1 className="text-2xl md:text-4xl font-bold text-amber-50 mb-6">{sectionTitle[currentSection]}</h1>
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-6">
+                    {filterBooks(currentSection).length === 0 ? (
+                      <p className="text-stone-400 col-span-3 md:col-span-6">No books yet. Start adding some!</p>
+                    ) : (
+                      filterBooks(currentSection).map((book) => (
+                        <BookCard key={book.id} book={book} onDelete={deleteBook} />
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommended */}
+              {currentSection === 'recommended' && (
+                <div className="space-y-6">
+                  <div>
+                    <h1 className="text-2xl md:text-4xl font-bold text-amber-50 mb-1">Recommended for you</h1>
+                    <p className="text-stone-400">Pick a genre to get personalised suggestions based on your library</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    {readGenres.length > 0 && (
+                      <p className="text-xs uppercase text-amber-400 font-semibold tracking-wider">From your read books</p>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {genreOptions.map(genre => (
+                        <button
+                          key={genre}
+                          onClick={() => setSelectedGenre(genre === selectedGenre ? null : genre)}
+                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors border ${
+                            selectedGenre === genre
+                              ? 'bg-amber-700 border-amber-600 text-amber-50'
+                              : 'bg-stone-800 border-stone-600 text-stone-300 hover:border-amber-700 hover:text-amber-100'
+                          }`}
+                        >
+                          {genre}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {!selectedGenre && (
+                    <div className="text-center py-16">
+                      <div className="text-6xl mb-4">✨</div>
+                      <p className="text-stone-400 text-lg">Select a genre above to see recommendations</p>
+                    </div>
+                  )}
+
+                  {loadingRecs && (
+                    <div className="text-center py-16">
+                      <p className="text-stone-400 animate-pulse text-lg">Finding books you'll love…</p>
+                    </div>
+                  )}
+
+                  {loadingRecs && (
+                    <div className="text-center py-8">
+                      <p className="text-stone-400 animate-pulse text-lg">Finding books you'll love…</p>
+                    </div>
+                  )}
+
+                  {!loadingRecs && selectedGenre && recommendations.length === 0 && (
+                    <p className="text-stone-400 text-center py-8">No recommendations found. Try a different genre.</p>
+                  )}
+
+                  {!loadingRecs && recommendations.length > 0 && (
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-bold text-amber-300">⭐ Top Rated in {selectedGenre}</h2>
+                      <p className="text-stone-400 text-sm mb-4">Highest rated books — click any to add to your library</p>
+                      <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-6">
+                        {recommendations.map((book, i) => (
+                          <div key={i} onClick={() => selectBook(book)}>
+                            <BookCard book={book} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {loadingTrending && (
+                    <div className="text-center py-8">
+                      <p className="text-stone-400 animate-pulse text-lg">Loading trending books…</p>
+                    </div>
+                  )}
+
+                  {!loadingTrending && trending.length > 0 && (
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-bold text-amber-300">🔥 Trending in {selectedGenre}</h2>
+                      <p className="text-stone-400 text-sm mb-4">Recently published and gaining attention</p>
+                      <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-6">
+                        {trending.map((book, i) => (
+                          <div key={i} onClick={() => selectBook(book)}>
+                            <BookCard book={book} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Discover */}
+              {currentSection === 'discover' && (
+                <div>
+                  <h1 className="text-2xl md:text-4xl font-bold text-amber-50 mb-2">Discover books</h1>
+                  <p className="text-stone-400 mb-6">Search by title or author to find and add books to your library</p>
+
+                  <div className="relative mb-8">
+                    <div className="flex items-center gap-2 bg-stone-800 border border-stone-700 rounded-lg px-4 py-3">
+                      <Search size={20} className="text-stone-400" />
+                      <input
+                        type="text"
+                        placeholder="Search millions of books by title or author..."
+                        value={searchQuery}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        className="flex-1 bg-transparent text-amber-50 placeholder-stone-500 outline-none"
+                        autoFocus
+                      />
+                      {searching && (
+                        <span className="text-stone-400 text-sm animate-pulse">Searching…</span>
+                      )}
+                      {searchQuery && !searching && (
+                        <button onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="text-stone-400 hover:text-amber-50">
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+
+                    {searchResults.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-stone-800 border border-stone-700 rounded-lg overflow-hidden z-10 shadow-xl max-h-96 overflow-y-auto">
+                        {searchResults.map((book, i) => (
+                          <button
+                            key={i}
+                            onClick={() => selectBook(book)}
+                            className="w-full px-4 py-3 hover:bg-stone-700 border-b border-stone-700 last:border-0 text-left transition-colors flex items-center gap-3"
+                          >
+                            {book.cover ? (
+                              <img src={book.cover} alt="" className="w-8 h-12 object-cover rounded flex-shrink-0" onError={(e) => e.target.style.display='none'} />
+                            ) : (
+                              <div className="w-8 h-12 bg-amber-900 rounded flex-shrink-0 flex items-center justify-center text-sm">📖</div>
+                            )}
+                            <div>
+                              <div className="font-medium text-amber-50">{book.title}</div>
+                              <div className="text-sm text-stone-400">by {book.author}</div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {!searching && searchResults.length === 0 && searchQuery && (
+                    <p className="text-stone-400 text-center">No books found. Try a different title or author.</p>
+                  )}
+
+                  {!searchQuery && (
+                    <div className="text-center py-16">
+                      <div className="text-6xl mb-4">🔍</div>
+                      <p className="text-stone-400 text-lg">Search to explore millions of books</p>
+                      <p className="text-stone-500 text-sm mt-1">Powered by Open Library</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom nav — mobile only */}
+          <div className="md:hidden fixed bottom-0 left-0 right-0 bg-stone-800 border-t border-stone-700 z-40 flex">
+            {bottomNav.map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => setCurrentSection(id)}
+                className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 text-xs transition-colors ${
+                  currentSection === id ? 'text-amber-400' : 'text-stone-500'
+                }`}
+              >
+                <Icon size={20} />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Modal */}
+          {showModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-60 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+              <div className="bg-stone-800 rounded-t-2xl md:rounded-2xl p-6 md:p-8 max-w-md w-full border border-stone-700 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-amber-50">Add book</h2>
+                  <button onClick={() => setShowModal(false)} className="text-stone-400 hover:text-amber-50">
+                    <X size={24} />
+                  </button>
+                </div>
+
+                <div className="mb-6 text-center">
+                  {currentBookData?.cover ? (
+                    <img
+                      src={currentBookData.cover}
+                      alt={formData.title}
+                      className="w-32 h-48 object-cover rounded-lg mx-auto shadow-lg"
+                      onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                    />
+                  ) : null}
+                  <div
+                    className="w-32 h-48 bg-gradient-to-br from-amber-900 to-amber-800 rounded-lg mx-auto items-center justify-center text-4xl"
+                    style={{ display: currentBookData?.cover ? 'none' : 'flex' }}
+                  >📖</div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-amber-300 mb-2">Title</label>
+                    <input
+                      type="text"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      className="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-amber-50 placeholder-stone-500 outline-none focus:border-amber-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-amber-300 mb-2">Author</label>
+                    <input
+                      type="text"
+                      value={formData.author}
+                      onChange={(e) => setFormData({ ...formData, author: e.target.value })}
+                      className="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-amber-50 placeholder-stone-500 outline-none focus:border-amber-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-amber-300 mb-2">Genre</label>
+                    <input
+                      type="text"
+                      value={formData.genre}
+                      onChange={(e) => setFormData({ ...formData, genre: e.target.value })}
+                      className="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-amber-50 placeholder-stone-500 outline-none focus:border-amber-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-amber-300 mb-2">Status</label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      className="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-amber-50 outline-none focus:border-amber-700"
+                    >
+                      <option value="unread">Currently reading</option>
+                      <option value="read">Read</option>
+                      <option value="wantlist">Want to read</option>
+                    </select>
+                  </div>
+
+                  {currentBookData?.rating > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-amber-300 mb-2">Community rating</label>
+                      <div className="text-yellow-400 font-semibold text-lg">
+                        ★ {Number(currentBookData.rating).toFixed(1)} <span className="text-stone-400 text-sm font-normal">/ 5</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-amber-300 mb-2">Notes</label>
+                    <textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder="Your thoughts..."
+                      className="w-full bg-stone-700 border border-stone-600 rounded px-3 py-2 text-amber-50 placeholder-stone-500 outline-none focus:border-amber-700 h-20 resize-none"
+                    />
+                  </div>
+
+                  <button
+                    onClick={saveBook}
+                    disabled={!formData.title.trim()}
+                    className="w-full py-2 bg-amber-700 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-amber-50 rounded font-medium transition-colors"
+                  >
+                    Save book
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<BookLibrary />);
+  </script>
+</body>
+</html>
